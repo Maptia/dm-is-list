@@ -244,7 +244,7 @@ module DataMapper
       #
       # @api public
       def is_list(options={})
-        options = { :scope => [], :first => 1 }.merge(options)
+        options = { :scope => [], :exclude_if => nil, :first => 1 }.merge(options)
 
         # coerce the scope into an Array
         options[:scope] = Array(options[:scope])
@@ -262,7 +262,7 @@ module DataMapper
           # if a position has been set before save, then insert it at the position and
           # move the other items in the list accordingly, else if no position has been set
           # then set position to bottom of list
-          __send__(:move_without_saving, position || :lowest)
+          __send__(:move_without_saving, position || :lowest) unless exclude?
 
           # on create, set moved to false so we can move the list item after creating it
           # self.moved = false
@@ -274,7 +274,7 @@ module DataMapper
           # the scope and position has changed => detach from old, move to pos in new
 
           # if the scope has changed, we need to detach our item from the old list
-          if list_scope != original_list_scope
+          if list_scope != original_list_scope and !exclude?
             newpos = position
             detach(original_list_scope) # removing from old list
             __send__(:move_without_saving, newpos || :lowest) # moving to pos or bottom of new list
@@ -341,6 +341,29 @@ module DataMapper
         # @api semipublic
         def list_scope
           Hash[ model.list_options[:scope].map { |p| [ p, attribute_get(p) ] } ]
+        end
+
+        ##
+        # returns result of calling the optional :exclude_if lambda with self as the only param
+        #
+        # @return <Boolean> whether this instance should be excluded from lists in current state.
+        #
+        # @example [Usage]
+        #   is :list, exclude_if: ->{|item| item.title.length < 100 }
+        #
+        #   item = Todo.get(2)
+        #   item.update {title => 'Short Title'}
+        #   item.exclude? # true
+        #
+        #
+        # @api semipublic
+        def exclude?
+          exclude_if = model.list_options[:exclude_if]
+          if exclude_if.lambda?
+            return exclude_if.call(self)
+          else
+            return false
+          end
         end
 
         ##
