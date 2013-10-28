@@ -359,7 +359,7 @@ module DataMapper
         # @api semipublic
         def exclude?
           exclude_if = model.list_options[:exclude_if]
-          if exclude_if.lambda?
+          if exclude_if.respond_to? :call
             return exclude_if.call(self)
           else
             return false
