@@ -262,7 +262,7 @@ module DataMapper
           # if a position has been set before save, then insert it at the position and
           # move the other items in the list accordingly, else if no position has been set
           # then set position to bottom of list
-          __send__(:move_without_saving, position || :lowest) unless exclude?
+          __send__(:move_without_saving, position || :lowest) unless exclude_from_list?
 
           # on create, set moved to false so we can move the list item after creating it
           # self.moved = false
@@ -274,10 +274,10 @@ module DataMapper
           # the scope and position has changed => detach from old, move to pos in new
 
           # if the scope has changed, we need to detach our item from the old list
-          if list_scope != original_list_scope and !exclude?
+          if list_scope != original_list_scope
             newpos = position
-            detach(original_list_scope) # removing from old list
-            __send__(:move_without_saving, newpos || :lowest) # moving to pos or bottom of new list
+            detach(original_list_scope) unless originally_excluded_from_list? # removing from old list
+            __send__(:move_without_saving, newpos || :lowest) unless exclude_from_list? # moving to pos or bottom of new list
           end
 
           #  NOTE:: uncommenting the following creates a large number of extra un-wanted SQL queries
@@ -344,23 +344,33 @@ module DataMapper
         end
 
         ##
-        # returns result of calling the optional :exclude_if lambda with self as the only param
+        # returns result of calling the optional :exclude_if lambda with the attributes hash as the only param
         #
         # @return <Boolean> whether this instance should be excluded from lists in current state.
         #
         # @example [Usage]
-        #   is :list, exclude_if: ->{|item| item.title.length < 100 }
+        #   is :list, exclude_if: ->{|attrs| attrs[:title].length < 100 }
         #
         #   item = Todo.get(2)
         #   item.update {title => 'Short Title'}
-        #   item.exclude? # true
+        #   item.exclude_from_list? # true
         #
         #
         # @api semipublic
-        def exclude?
+        def exclude_from_list?
           exclude_if = model.list_options[:exclude_if]
           if exclude_if.respond_to? :call
-            return exclude_if.call(self)
+            return exclude_if.call(attributes)
+          else
+            return false
+          end
+        end
+
+        def originally_excluded_from_list?
+          exclude_if = model.list_options[:exclude_if]
+          if exclude_if.respond_to? :call
+            merged_attributes = attributes.merge Hash[original_attributes.map{|key,val| [key.name,val] } ]
+            return exclude_if.call(merged_attributes)
           else
             return false
           end
